@@ -1,0 +1,1503 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gmail 아웃바운드 시스템</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --surface: #ffffff;
+    --border: #e2e0d8;
+    --border-strong: #c8c5bb;
+    --text: #1a1a18;
+    --text-muted: #6b6960;
+    --text-hint: #9e9b92;
+    --accent: #2d6a4f;
+    --accent-light: #e8f4ee;
+    --accent-dark: #1a3d2e;
+    --danger: #c0392b;
+    --danger-light: #fdecea;
+    --blue: #1a56a0;
+    --blue-light: #e8f0fb;
+    --amber: #b45309;
+    --amber-light: #fef3cd;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo { font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .logo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; }
+  #user-info { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-muted); }
+  #user-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-light); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--accent); }
+
+  /* ── Layout ── */
+  .main-layout {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    min-height: calc(100vh - 56px);
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 16px 0;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
+    border-left: 2px solid transparent;
+  }
+  .nav-item:hover { background: var(--bg); color: var(--text); }
+  .nav-item.active { background: var(--accent-light); color: var(--accent); border-left-color: var(--accent); }
+  .nav-icon { font-size: 16px; }
+  .nav-badge {
+    margin-left: auto;
+    background: var(--accent-light);
+    color: var(--accent);
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+
+  /* ── Content ── */
+  .content { padding: 24px; overflow-y: auto; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .card-title { font-weight: 600; font-size: 14px; }
+  .card-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .card-body { padding: 20px; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .btn:hover { background: var(--bg); }
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent-dark);
+  }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-danger {
+    background: var(--danger-light);
+    color: var(--danger);
+    border-color: #f5c6c2;
+  }
+  .btn-danger:hover { background: #fbd5d2; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ── Form elements ── */
+  input, select, textarea {
+    font-family: inherit;
+    font-size: 13px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    background: var(--surface);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  textarea { resize: vertical; line-height: 1.7; }
+  label { font-size: 12px; font-weight: 500; color: var(--text-muted); display: block; margin-bottom: 5px; }
+  .form-group { margin-bottom: 16px; }
+
+  /* ── Table ── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-hint);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg); }
+  .truncate { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge-green { background: var(--accent-light); color: var(--accent); }
+  .badge-blue { background: var(--blue-light); color: var(--blue); }
+  .badge-amber { background: var(--amber-light); color: var(--amber); }
+  .badge-gray { background: #f1efe8; color: #5f5e5a; }
+
+  /* ── Login screen ── */
+  #login-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    flex-direction: column;
+    gap: 24px;
+    padding: 40px;
+  }
+  .login-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 48px 56px;
+    text-align: center;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: var(--shadow);
+  }
+  .login-icon { font-size: 40px; margin-bottom: 16px; }
+  .login-title { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+  .login-sub { font-size: 14px; color: var(--text-muted); margin-bottom: 28px; line-height: 1.7; }
+  .google-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: var(--surface);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    color: var(--text);
+    transition: all 0.15s;
+    margin-bottom: 12px;
+  }
+  .google-btn:hover { background: var(--bg); }
+  .setup-note {
+    background: var(--blue-light);
+    border: 1px solid #b5d4f4;
+    border-radius: 8px;
+    padding: 14px 16px;
+    text-align: left;
+    font-size: 12px;
+    color: var(--blue);
+    line-height: 1.7;
+  }
+  .setup-note strong { font-weight: 600; }
+
+  /* ── Config modal ── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .modal {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 28px;
+    width: 100%;
+    max-width: 500px;
+    border: 1px solid var(--border);
+  }
+  .modal-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .modal-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+  /* ── Stats row ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+  }
+  .stat-label { font-size: 11px; color: var(--text-hint); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+  .stat-value { font-size: 24px; font-weight: 600; }
+  .stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+
+  /* ── Progress ── */
+  .progress-bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.3s;
+  }
+
+  /* ── Mail preview ── */
+  .mail-preview {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    font-family: 'Noto Sans KR', sans-serif;
+    color: var(--text);
+    min-height: 120px;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  .variable-tag {
+    display: inline-block;
+    background: var(--amber-light);
+    color: var(--amber);
+    border-radius: 3px;
+    padding: 0 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+
+  /* ── Recipient list ── */
+  .recipient-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .recipient-row input { margin: 0; }
+
+  /* ── Toast ── */
+  .toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .toast {
+    background: var(--text);
+    color: white;
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    animation: slideIn 0.2s ease;
+    max-width: 320px;
+  }
+  .toast.success { background: var(--accent); }
+  .toast.error { background: var(--danger); }
+  @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  /* ── Loading ── */
+  .spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Empty state ── */
+  .empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-muted);
+  }
+  .empty-icon { font-size: 36px; margin-bottom: 12px; }
+  .empty-title { font-size: 15px; font-weight: 500; margin-bottom: 6px; }
+  .empty-sub { font-size: 13px; color: var(--text-hint); }
+
+  /* ── Responsive adjustments ── */
+  .flex-row { display: flex; gap: 12px; align-items: flex-start; }
+  .flex-row > * { flex: 1; }
+  .ml-auto { margin-left: auto; }
+  .mt-16 { margin-top: 16px; }
+  .mb-16 { margin-bottom: 16px; }
+  .text-muted { color: var(--text-muted); }
+  .text-small { font-size: 12px; }
+  code { font-family: 'JetBrains Mono', monospace; background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN SCREEN ── -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-icon">📨</div>
+    <div class="login-title">Gmail 아웃바운드 시스템</div>
+    <div class="login-sub">보낸 메일을 수집하고 분석하여<br>개인화된 단체 메일을 쉽게 발송하세요</div>
+    <button class="google-btn" onclick="handleLogin()">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.166 6.656 3.58 9 3.58z"/></svg>
+      Google 계정으로 로그인
+    </button>
+    <div class="setup-note">
+      <strong>⚙️ 최초 설정 필요</strong><br>
+      Google Cloud Console에서 OAuth 2.0 클라이언트 ID를 발급하고 아래 설정 버튼에 입력하세요. Gmail API와 Sheets API를 활성화해야 합니다.
+    </div>
+    <button class="btn mt-16" style="width:100%; justify-content:center;" onclick="showConfigModal()">
+      ⚙️ OAuth 클라이언트 ID 설정
+    </button>
+  </div>
+</div>
+
+<!-- ── CONFIG MODAL ── -->
+<div id="config-modal" class="modal-overlay" style="display:none;">
+  <div class="modal">
+    <div class="modal-title">Google OAuth 설정</div>
+    <div class="modal-sub">Google Cloud Console → API 및 서비스 → 사용자 인증 정보에서 발급한 클라이언트 ID를 입력하세요.</div>
+    <div class="form-group">
+      <label>OAuth 클라이언트 ID</label>
+      <input type="text" id="client-id-input" placeholder="123456789-xxx.apps.googleusercontent.com">
+    </div>
+    <div class="form-group">
+      <label>Google Sheets ID (이미 만들어 둔 시트가 있으면 입력, 없으면 공란)</label>
+      <input type="text" id="sheet-id-input" placeholder="스프레드시트 URL의 /d/ 뒤 ID">
+    </div>
+    <div style="background: var(--blue-light); border-radius:6px; padding:12px; font-size:12px; color:var(--blue); line-height:1.8;">
+      <strong>설정 방법:</strong><br>
+      1. <a href="https://console.cloud.google.com" target="_blank" style="color:var(--blue)">console.cloud.google.com</a> 접속<br>
+      2. 새 프로젝트 생성 → Gmail API, Sheets API 활성화<br>
+      3. OAuth 동의 화면 설정 (외부, 테스터에 내 이메일 추가)<br>
+      4. 사용자 인증 정보 → OAuth 클라이언트 ID 생성 (웹 앱)<br>
+      5. 승인된 JavaScript 원본에 이 파일의 URL 추가
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeConfigModal()">취소</button>
+      <button class="btn btn-primary" onclick="saveConfig()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MAIN APP ── -->
+<div id="app" style="display:none;">
+  <header>
+    <div class="logo">
+      <span class="logo-dot"></span>
+      Gmail 아웃바운드
+    </div>
+    <div id="user-info">
+      <div id="user-avatar">?</div>
+      <span id="user-name">로그인 중...</span>
+      <button class="btn btn-sm" onclick="handleLogout()">로그아웃</button>
+    </div>
+  </header>
+
+  <div class="main-layout">
+    <nav class="sidebar">
+      <div class="nav-item active" onclick="navigate('dashboard')">
+        <span class="nav-icon">📊</span> 대시보드
+      </div>
+      <div class="nav-item" onclick="navigate('collect')">
+        <span class="nav-icon">📥</span> 메일 수집
+        <span class="nav-badge" id="mail-count-badge">0</span>
+      </div>
+      <div class="nav-item" onclick="navigate('database')">
+        <span class="nav-icon">🗄️</span> 메일 DB
+      </div>
+      <div class="nav-item" onclick="navigate('compose')">
+        <span class="nav-icon">✉️</span> 단체 발송
+      </div>
+      <div class="nav-item" onclick="navigate('settings')">
+        <span class="nav-icon">⚙️</span> 설정
+      </div>
+    </nav>
+
+    <main class="content">
+
+      <!-- ── DASHBOARD ── -->
+      <div id="page-dashboard" class="page active">
+        <h2 style="font-size:18px; font-weight:600; margin-bottom:4px;">대시보드</h2>
+        <p class="text-muted text-small mb-16">수집된 발송 이력과 현황을 확인합니다.</p>
+
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-label">수집된 메일</div>
+            <div class="stat-value" id="stat-total">0</div>
+            <div class="stat-sub">전체 아웃바운드</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">고유 수신자</div>
+            <div class="stat-value" id="stat-recipients">0</div>
+            <div class="stat-sub">발송한 상대방</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">단체 발송 이력</div>
+            <div class="stat-value" id="stat-campaigns">0</div>
+            <div class="stat-sub">이번 세션</div>
+          </div>
+        </div>
+
+        <div class="card mb-16">
+          <div class="card-header">
+            <div>
+              <div class="card-title">최근 수집된 메일</div>
+              <div class="card-subtitle">마지막 5건</div>
+            </div>
+            <button class="btn btn-sm" onclick="navigate('collect')">더 수집하기</button>
+          </div>
+          <div id="recent-mails-table">
+            <div class="empty-state">
+              <div class="empty-icon">📭</div>
+              <div class="empty-title">수집된 메일이 없습니다</div>
+              <div class="empty-sub">메일 수집 탭에서 Gmail 아웃바운드를 가져오세요</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── COLLECT ── -->
+      <div id="page-collect" class="page">
+        <h2 style="font-size:18px; font-weight:600; margin-bottom:4px;">메일 수집</h2>
+        <p class="text-muted text-small mb-16">Gmail 보낸 메일함에서 발송 이력을 가져와 Sheets에 저장합니다.</p>
+
+        <div class="card mb-16">
+          <div class="card-header">
+            <div class="card-title">수집 설정</div>
+          </div>
+          <div class="card-body">
+            <div class="flex-row">
+              <div class="form-group" style="margin-bottom:0;">
+                <label>최대 수집 건수</label>
+                <select id="collect-max">
+                  <option value="100">최근 100건</option>
+                  <option value="300">최근 300건</option>
+                  <option value="500">최근 500건</option>
+                  <option value="1000">최근 1,000건</option>
+                  <option value="all">전체 (시간이 걸릴 수 있음)</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label>필터 (선택)</label>
+                <input type="text" id="collect-filter" placeholder="예: 제안서, 견적, from:me">
+              </div>
+            </div>
+            <div style="margin-top:16px; display:flex; gap:10px; align-items:center;">
+              <button class="btn btn-primary" id="collect-btn" onclick="collectMails()">
+                📥 메일 수집 시작
+              </button>
+              <div id="collect-status" class="text-muted text-small"></div>
+            </div>
+            <div id="collect-progress" style="display:none; margin-top:12px;">
+              <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;" id="collect-progress-text">수집 중...</div>
+              <div class="progress-bar"><div class="progress-fill" id="collect-progress-fill" style="width:0%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">수집 결과</div>
+              <div class="card-subtitle" id="collected-count-label">아직 수집 전</div>
+            </div>
+            <button class="btn btn-sm" onclick="syncToSheets()" id="sync-btn" disabled>
+              📊 Sheets에 저장
+            </button>
+          </div>
+          <div id="collect-results">
+            <div class="empty-state">
+              <div class="empty-icon">📨</div>
+              <div class="empty-title">수집 대기 중</div>
+              <div class="empty-sub">위 버튼을 눌러 수집을 시작하세요</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── DATABASE ── -->
+      <div id="page-database" class="page">
+        <h2 style="font-size:18px; font-weight:600; margin-bottom:4px;">메일 DB</h2>
+        <p class="text-muted text-small mb-16">수집된 전체 발송 이력입니다. 검색 및 필터가 가능합니다.</p>
+
+        <div style="display:flex; gap:10px; margin-bottom:16px;">
+          <input type="text" id="db-search" placeholder="수신자, 제목 검색..." style="max-width:300px;" oninput="filterDatabase()">
+          <select id="db-sort" onchange="filterDatabase()" style="width:140px;">
+            <option value="date-desc">최신순</option>
+            <option value="date-asc">오래된순</option>
+            <option value="recipient">수신자순</option>
+          </select>
+          <button class="btn btn-sm ml-auto" onclick="exportToCSV()">⬇ CSV 내보내기</button>
+        </div>
+
+        <div class="card">
+          <div id="database-table">
+            <div class="empty-state">
+              <div class="empty-icon">🗄️</div>
+              <div class="empty-title">데이터가 없습니다</div>
+              <div class="empty-sub">메일 수집 탭에서 먼저 데이터를 수집하세요</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── COMPOSE ── -->
+      <div id="page-compose" class="page">
+        <h2 style="font-size:18px; font-weight:600; margin-bottom:4px;">단체 발송</h2>
+        <p class="text-muted text-small mb-16">
+          과거 메일을 템플릿으로 활용하거나 새로 작성하여 개인화 단체 발송합니다.
+          <code>{{이름}}</code> <code>{{회사}}</code> <code>{{내용1}}</code> 등 변수를 사용하세요.
+        </p>
+
+        <div class="flex-row" style="align-items:stretch; gap:16px;">
+          <!-- Left: 작성 -->
+          <div style="flex:1.2;">
+            <div class="card mb-16">
+              <div class="card-header">
+                <div class="card-title">메일 내용 작성</div>
+                <button class="btn btn-sm" onclick="loadTemplate()">📋 과거 메일 불러오기</button>
+              </div>
+              <div class="card-body">
+                <div class="form-group">
+                  <label>제목</label>
+                  <input type="text" id="mail-subject" placeholder="{{회사}}에 보내는 신규 제안의 건" oninput="updatePreview()">
+                </div>
+                <div class="form-group">
+                  <label>본문 ({{이름}}, {{회사}}, {{내용1}}, {{내용2}} 변수 사용 가능)</label>
+                  <textarea id="mail-body" rows="12" placeholder="안녕하세요, {{이름}} 담당자님.&#10;&#10;{{회사}}에 새로운 제안이 있어 연락드립니다.&#10;&#10;{{내용1}}&#10;&#10;감사합니다." oninput="updatePreview()"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: 미리보기 -->
+          <div style="flex:1;">
+            <div class="card mb-16">
+              <div class="card-header">
+                <div class="card-title">미리보기</div>
+                <span class="badge badge-amber" id="preview-label">첫 번째 수신자 기준</span>
+              </div>
+              <div class="card-body" style="padding:14px;">
+                <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">제목</div>
+                <div id="preview-subject" style="font-weight:500; margin-bottom:12px; font-size:14px;">—</div>
+                <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">본문</div>
+                <div class="mail-preview" id="preview-body">본문을 입력하면 여기서 미리볼 수 있습니다.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recipients -->
+        <div class="card mb-16">
+          <div class="card-header">
+            <div>
+              <div class="card-title">수신자 목록</div>
+              <div class="card-subtitle">변수에 맞게 각 수신자별 정보를 입력하세요</div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-sm" onclick="addRecipient()">+ 수신자 추가</button>
+              <button class="btn btn-sm" onclick="importFromDB()">DB에서 가져오기</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:8px; margin-bottom:8px;">
+              <div style="font-size:11px;font-weight:600;color:var(--text-hint);text-transform:uppercase;letter-spacing:.04em;">이메일</div>
+              <div style="font-size:11px;font-weight:600;color:var(--text-hint);text-transform:uppercase;letter-spacing:.04em;">이름 <code>{{이름}}</code></div>
+              <div style="font-size:11px;font-weight:600;color:var(--text-hint);text-transform:uppercase;letter-spacing:.04em;">회사 <code>{{회사}}</code></div>
+              <div></div>
+            </div>
+            <div id="recipient-list"></div>
+            <div id="recipient-empty" class="text-muted text-small" style="padding:8px 0;">수신자를 추가하거나 DB에서 가져오세요</div>
+          </div>
+        </div>
+
+        <!-- Extra variables -->
+        <div class="card mb-16">
+          <div class="card-header">
+            <div class="card-title">추가 변수 <code>{{내용1}}</code></div>
+            <div class="card-subtitle">모든 수신자에게 동일하게 적용되는 공통 내용</div>
+          </div>
+          <div class="card-body">
+            <div class="flex-row">
+              <div class="form-group" style="margin-bottom:0;">
+                <label>내용1 <code>{{내용1}}</code></label>
+                <textarea id="var-content1" rows="3" oninput="updatePreview()" placeholder="예: 이번 달 특별 프로모션으로 30% 할인을 제공해 드립니다."></textarea>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label>내용2 <code>{{내용2}}</code></label>
+                <textarea id="var-content2" rows="3" oninput="updatePreview()" placeholder="예: 다음 주 미팅을 제안드립니다."></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Send button -->
+        <div class="card">
+          <div class="card-body" style="display:flex;align-items:center;gap:16px;justify-content:space-between;">
+            <div id="send-summary" class="text-muted text-small">수신자를 추가하면 발송 준비됩니다.</div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn" onclick="testSend()">📧 테스트 발송 (나에게)</button>
+              <button class="btn btn-primary" id="send-btn" onclick="sendBulkMail()">🚀 단체 발송 시작</button>
+            </div>
+          </div>
+          <div id="send-progress" style="display:none; padding:0 20px 16px;">
+            <div class="progress-bar"><div class="progress-fill" id="send-progress-fill" style="width:0%"></div></div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px;" id="send-progress-text"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SETTINGS ── -->
+      <div id="page-settings" class="page">
+        <h2 style="font-size:18px; font-weight:600; margin-bottom:4px;">설정</h2>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Google 연동 설정</div></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>OAuth 클라이언트 ID</label>
+              <input type="text" id="settings-client-id" placeholder="입력된 값 없음">
+            </div>
+            <div class="form-group">
+              <label>Google Sheets ID</label>
+              <input type="text" id="settings-sheet-id" placeholder="미설정">
+            </div>
+            <div class="form-group">
+              <label>발송자 이름 (From 표시)</label>
+              <input type="text" id="settings-sender-name" placeholder="예: 홍길동 (ABC회사)">
+            </div>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <button class="btn btn-primary" onclick="saveSettings()">설정 저장</button>
+              <button class="btn" onclick="createSheet()">📊 새 Sheets 만들기</button>
+            </div>
+          </div>
+        </div>
+        <div class="card mt-16">
+          <div class="card-header"><div class="card-title">데이터 관리</div></div>
+          <div class="card-body">
+            <p class="text-muted text-small mb-16">로컬에 캐시된 메일 데이터를 초기화합니다. Sheets의 데이터는 유지됩니다.</p>
+            <button class="btn btn-danger" onclick="clearLocalData()">🗑 로컬 캐시 초기화</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- Template picker modal -->
+<div id="template-modal" class="modal-overlay" style="display:none;">
+  <div class="modal" style="max-width:600px;">
+    <div class="modal-title">과거 메일 불러오기</div>
+    <div class="modal-sub">수집된 메일 중 하나를 선택하면 제목과 본문을 불러옵니다.</div>
+    <input type="text" id="template-search" placeholder="제목 검색..." oninput="filterTemplates()" style="margin-bottom:12px;">
+    <div id="template-list" style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeTemplateModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// ────────────────────────────────
+// CONFIGURATION & STATE
+// ────────────────────────────────
+const SCOPES = [
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/spreadsheets',
+  'email','profile'
+].join(' ');
+
+let state = {
+  accessToken: null,
+  userEmail: null,
+  userName: null,
+  collectedMails: [],
+  recipients: [],
+  campaignCount: 0,
+  clientId: localStorage.getItem('gm_client_id') || '',
+  sheetId: localStorage.getItem('gm_sheet_id') || '',
+  senderName: localStorage.getItem('gm_sender_name') || '',
+};
+
+// Load cached mails
+try {
+  const cached = localStorage.getItem('gm_mails');
+  if (cached) state.collectedMails = JSON.parse(cached);
+} catch(e) {}
+
+// ────────────────────────────────
+// AUTH
+// ────────────────────────────────
+function handleLogin() {
+  if (!state.clientId) {
+    toast('먼저 OAuth 클라이언트 ID를 설정해 주세요.', 'error');
+    showConfigModal();
+    return;
+  }
+  const params = new URLSearchParams({
+    client_id: state.clientId,
+    redirect_uri: window.location.href.split('?')[0].split('#')[0],
+    response_type: 'token',
+    scope: SCOPES,
+    prompt: 'consent',
+  });
+  window.location = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+}
+
+function handleLogout() {
+  state.accessToken = null;
+  state.userEmail = null;
+  localStorage.removeItem('gm_token');
+  showLogin();
+}
+
+async function initApp(token) {
+  state.accessToken = token;
+  try {
+    const res = await gapi('https://www.googleapis.com/oauth2/v3/userinfo');
+    state.userEmail = res.email;
+    state.userName = res.name || res.email;
+    const initials = (res.name || res.email).slice(0,2).toUpperCase();
+    document.getElementById('user-avatar').textContent = initials;
+    document.getElementById('user-name').textContent = res.email;
+  } catch(e) {
+    state.userEmail = 'user';
+    document.getElementById('user-name').textContent = '연결됨';
+  }
+  showApp();
+  updateDashboard();
+  loadSettings();
+}
+
+function showLogin() {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+}
+
+// Check hash on load
+window.onload = () => {
+  const hash = new URLSearchParams(window.location.hash.slice(1));
+  const token = hash.get('access_token');
+  if (token) {
+    localStorage.setItem('gm_token', token);
+    history.replaceState(null, '', window.location.pathname);
+    initApp(token);
+  } else {
+    const saved = localStorage.getItem('gm_token');
+    if (saved) initApp(saved); else showLogin();
+  }
+  loadSettings();
+};
+
+// ────────────────────────────────
+// NAVIGATION
+// ────────────────────────────────
+function navigate(page) {
+  document.querySelectorAll('.nav-item').forEach((el,i) => {
+    const pages = ['dashboard','collect','database','compose','settings'];
+    el.classList.toggle('active', pages[i] === page);
+  });
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(`page-${page}`).classList.add('active');
+  if (page === 'database') renderDatabase();
+  if (page === 'dashboard') updateDashboard();
+}
+
+// ────────────────────────────────
+// GOOGLE API HELPER
+// ────────────────────────────────
+async function gapi(url, options = {}) {
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'Authorization': `Bearer ${state.accessToken}`,
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    if (res.status === 401) {
+      toast('인증이 만료됐습니다. 다시 로그인해 주세요.', 'error');
+      handleLogout();
+      throw new Error('Unauthorized');
+    }
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// ────────────────────────────────
+// MAIL COLLECTION
+// ────────────────────────────────
+async function collectMails() {
+  if (!state.accessToken) { toast('먼저 로그인해 주세요.', 'error'); return; }
+
+  const maxStr = document.getElementById('collect-max').value;
+  const maxCount = maxStr === 'all' ? 10000 : parseInt(maxStr);
+  const filter = document.getElementById('collect-filter').value.trim();
+  const btn = document.getElementById('collect-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> 수집 중...';
+
+  document.getElementById('collect-progress').style.display = 'block';
+  setProgress('collect', 0, '메일 목록 가져오는 중...');
+
+  const mails = [];
+  let pageToken = null;
+  let fetched = 0;
+
+  try {
+    // Get message IDs from SENT
+    let q = 'in:sent';
+    if (filter) q += ` ${filter}`;
+
+    do {
+      const params = new URLSearchParams({ q, maxResults: Math.min(100, maxCount - fetched) });
+      if (pageToken) params.set('pageToken', pageToken);
+      const list = await gapi(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`);
+
+      const msgs = list.messages || [];
+      pageToken = list.nextPageToken;
+
+      for (let i = 0; i < msgs.length; i++) {
+        const pct = Math.round(((fetched + i) / maxCount) * 100);
+        setProgress('collect', Math.min(pct, 95), `${fetched + i + 1}번째 메일 처리 중...`);
+
+        try {
+          const detail = await gapi(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgs[i].id}?format=full`
+          );
+          const mail = parseMail(detail);
+          if (mail) mails.push(mail);
+        } catch(e) { /* skip */ }
+      }
+      fetched += msgs.length;
+    } while (pageToken && fetched < maxCount);
+
+    // Deduplicate by id
+    const existing = new Set(state.collectedMails.map(m => m.id));
+    const newMails = mails.filter(m => !existing.has(m.id));
+
+    state.collectedMails = [...state.collectedMails, ...newMails]
+      .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+    localStorage.setItem('gm_mails', JSON.stringify(state.collectedMails));
+
+    setProgress('collect', 100, `완료! ${newMails.length}건 새로 추가됨 (전체 ${state.collectedMails.length}건)`);
+    document.getElementById('collected-count-label').textContent =
+      `${state.collectedMails.length}건 수집됨 (이번에 ${newMails.length}건 신규)`;
+
+    renderCollectResults();
+    updateDashboard();
+    document.getElementById('sync-btn').disabled = false;
+    toast(`${mails.length}건 수집 완료 (신규 ${newMails.length}건)`, 'success');
+  } catch(e) {
+    toast('수집 실패: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '📥 메일 수집 시작';
+  }
+}
+
+function parseMail(data) {
+  const headers = data.payload?.headers || [];
+  const get = name => headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
+  const to = get('To');
+  const subject = get('Subject');
+  const date = get('Date');
+  const snippet = data.snippet || '';
+  // Extract body
+  let body = extractBody(data.payload);
+
+  const email = to.match(/[^\s<>]+@[^\s<>]+/)?.[0] || to;
+  const recipientName = to.replace(/<.*>/, '').trim().replace(/"/g, '') || email;
+
+  return {
+    id: data.id,
+    to, email, recipientName,
+    subject, date: new Date(date).toISOString(),
+    snippet, body,
+    hasAttachment: data.payload?.parts?.some(p => p.filename) || false,
+  };
+}
+
+function extractBody(payload) {
+  if (!payload) return '';
+  if (payload.mimeType === 'text/plain' && payload.body?.data) {
+    return atob(payload.body.data.replace(/-/g,'+').replace(/_/g,'/'));
+  }
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      const body = extractBody(part);
+      if (body) return body;
+    }
+  }
+  return '';
+}
+
+function renderCollectResults() {
+  const mails = state.collectedMails.slice(0, 50);
+  if (!mails.length) return;
+  const el = document.getElementById('collect-results');
+  el.innerHTML = `<table>
+    <thead><tr>
+      <th>날짜</th><th>수신자</th><th>제목</th><th>미리보기</th>
+    </tr></thead>
+    <tbody>${mails.map(m => `
+      <tr>
+        <td>${fmtDate(m.date)}</td>
+        <td class="truncate" style="max-width:140px;">${esc(m.email)}</td>
+        <td class="truncate">${esc(m.subject)}</td>
+        <td class="truncate" style="color:var(--text-muted);">${esc(m.snippet)}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+// ────────────────────────────────
+// SYNC TO SHEETS
+// ────────────────────────────────
+async function syncToSheets() {
+  if (!state.sheetId) {
+    toast('설정에서 Sheets ID를 먼저 입력하거나 새 Sheets를 만드세요.', 'error');
+    return;
+  }
+  const btn = document.getElementById('sync-btn');
+  btn.disabled = true;
+  btn.textContent = '저장 중...';
+
+  try {
+    // Check if header exists
+    const check = await gapi(
+      `https://sheets.googleapis.com/v4/spreadsheets/${state.sheetId}/values/메일DB!A1`
+    ).catch(() => null);
+
+    const header = [['ID','날짜','수신자이름','수신자이메일','제목','본문미리보기','첨부여부']];
+
+    if (!check?.values?.length) {
+      await gapi(
+        `https://sheets.googleapis.com/v4/spreadsheets/${state.sheetId}/values/메일DB!A1:G1:append?valueInputOption=RAW`,
+        { method:'POST', body: JSON.stringify({ values: header }) }
+      );
+    }
+
+    // Get existing IDs
+    const existing = await gapi(
+      `https://sheets.googleapis.com/v4/spreadsheets/${state.sheetId}/values/메일DB!A:A`
+    ).catch(() => ({ values: [] }));
+    const existingIds = new Set((existing.values || []).flat());
+
+    const newRows = state.collectedMails
+      .filter(m => !existingIds.has(m.id))
+      .map(m => [m.id, fmtDate(m.date), m.recipientName, m.email, m.subject, m.snippet, m.hasAttachment ? 'Y' : 'N']);
+
+    if (newRows.length === 0) {
+      toast('새로 추가할 데이터가 없습니다 (이미 모두 저장됨)', '');
+      return;
+    }
+
+    await gapi(
+      `https://sheets.googleapis.com/v4/spreadsheets/${state.sheetId}/values/메일DB!A:G:append?valueInputOption=RAW`,
+      { method:'POST', body: JSON.stringify({ values: newRows }) }
+    );
+
+    toast(`${newRows.length}건 Sheets에 저장했습니다!`, 'success');
+  } catch(e) {
+    toast('Sheets 저장 실패: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📊 Sheets에 저장';
+  }
+}
+
+async function createSheet() {
+  if (!state.accessToken) { toast('먼저 로그인하세요.', 'error'); return; }
+  try {
+    const res = await gapi('https://sheets.googleapis.com/v4/spreadsheets', {
+      method: 'POST',
+      body: JSON.stringify({
+        properties: { title: 'Gmail 아웃바운드 DB' },
+        sheets: [
+          { properties: { title: '메일DB' } },
+          { properties: { title: '발송이력' } }
+        ]
+      })
+    });
+    state.sheetId = res.spreadsheetId;
+    localStorage.setItem('gm_sheet_id', state.sheetId);
+    document.getElementById('settings-sheet-id').value = state.sheetId;
+    toast(`Sheets 생성 완료! ID: ${state.sheetId}`, 'success');
+    window.open(`https://docs.google.com/spreadsheets/d/${state.sheetId}`, '_blank');
+  } catch(e) {
+    toast('Sheets 생성 실패: ' + e.message, 'error');
+  }
+}
+
+// ────────────────────────────────
+// DATABASE VIEW
+// ────────────────────────────────
+function filterDatabase() {
+  renderDatabase();
+}
+
+function renderDatabase() {
+  const search = (document.getElementById('db-search')?.value || '').toLowerCase();
+  const sort = document.getElementById('db-sort')?.value || 'date-desc';
+
+  let mails = [...state.collectedMails];
+  if (search) mails = mails.filter(m =>
+    m.email.toLowerCase().includes(search) ||
+    m.subject.toLowerCase().includes(search) ||
+    (m.recipientName || '').toLowerCase().includes(search)
+  );
+
+  if (sort === 'date-asc') mails.sort((a,b) => new Date(a.date) - new Date(b.date));
+  else if (sort === 'recipient') mails.sort((a,b) => a.email.localeCompare(b.email));
+  else mails.sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  const el = document.getElementById('database-table');
+  if (!mails.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🗄️</div><div class="empty-title">결과 없음</div></div>`;
+    return;
+  }
+
+  el.innerHTML = `<table>
+    <thead><tr>
+      <th>날짜</th><th>수신자</th><th>이메일</th><th>제목</th><th>첨부</th><th></th>
+    </tr></thead>
+    <tbody>${mails.map(m => `
+      <tr>
+        <td style="white-space:nowrap;">${fmtDate(m.date)}</td>
+        <td>${esc(m.recipientName)}</td>
+        <td style="color:var(--text-muted);">${esc(m.email)}</td>
+        <td class="truncate">${esc(m.subject)}</td>
+        <td>${m.hasAttachment ? '<span class="badge badge-amber">첨부</span>' : ''}</td>
+        <td><button class="btn btn-sm" onclick="useAsTemplate('${m.id}')">템플릿 사용</button></td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+function exportToCSV() {
+  if (!state.collectedMails.length) { toast('데이터가 없습니다.', 'error'); return; }
+  const header = 'ID,날짜,수신자이름,수신자이메일,제목,미리보기,첨부\n';
+  const rows = state.collectedMails.map(m =>
+    [m.id, fmtDate(m.date), m.recipientName, m.email, m.subject, m.snippet, m.hasAttachment ? 'Y' : 'N']
+      .map(v => `"${String(v).replace(/"/g,'""')}"`)
+      .join(',')
+  ).join('\n');
+
+  const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `gmail_outbound_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  toast('CSV 다운로드 완료!', 'success');
+}
+
+// ────────────────────────────────
+// COMPOSE & SEND
+// ────────────────────────────────
+function addRecipient(email = '', name = '', company = '') {
+  const idx = state.recipients.length;
+  state.recipients.push({ email, name, company });
+  renderRecipients();
+  updatePreview();
+}
+
+function removeRecipient(idx) {
+  state.recipients.splice(idx, 1);
+  renderRecipients();
+  updatePreview();
+}
+
+function renderRecipients() {
+  const el = document.getElementById('recipient-list');
+  const empty = document.getElementById('recipient-empty');
+  empty.style.display = state.recipients.length ? 'none' : 'block';
+
+  el.innerHTML = state.recipients.map((r, i) => `
+    <div class="recipient-row">
+      <input type="email" value="${esc(r.email)}" placeholder="email@example.com"
+        onchange="state.recipients[${i}].email=this.value; updatePreview()">
+      <input type="text" value="${esc(r.name)}" placeholder="이름"
+        onchange="state.recipients[${i}].name=this.value; updatePreview()">
+      <input type="text" value="${esc(r.company)}" placeholder="회사명"
+        onchange="state.recipients[${i}].company=this.value; updatePreview()">
+      <button class="btn btn-sm btn-danger" onclick="removeRecipient(${i})">✕</button>
+    </div>
+  `).join('');
+
+  const count = state.recipients.length;
+  document.getElementById('send-summary').textContent =
+    count ? `${count}명에게 발송 예정` : '수신자를 추가하면 발송 준비됩니다.';
+  document.getElementById('send-btn').disabled = count === 0;
+}
+
+function interpolate(text, r, extra = {}) {
+  return text
+    .replace(/\{\{이름\}\}/g, r.name || '담당자')
+    .replace(/\{\{회사\}\}/g, r.company || '귀사')
+    .replace(/\{\{이메일\}\}/g, r.email || '')
+    .replace(/\{\{내용1\}\}/g, extra.content1 || '')
+    .replace(/\{\{내용2\}\}/g, extra.content2 || '');
+}
+
+function updatePreview() {
+  const subject = document.getElementById('mail-subject')?.value || '';
+  const body = document.getElementById('mail-body')?.value || '';
+  const content1 = document.getElementById('var-content1')?.value || '';
+  const content2 = document.getElementById('var-content2')?.value || '';
+  const sample = state.recipients[0] || { name: '홍길동', company: 'ABC회사', email: 'sample@example.com' };
+  const extra = { content1, content2 };
+
+  document.getElementById('preview-subject').textContent = interpolate(subject, sample, extra) || '—';
+  document.getElementById('preview-body').textContent = interpolate(body, sample, extra) || '본문을 입력하세요.';
+}
+
+function importFromDB() {
+  const mails = state.collectedMails.slice(0, 50);
+  if (!mails.length) { toast('먼저 메일을 수집해 주세요.', 'error'); return; }
+  // Add unique recipients from DB
+  const existing = new Set(state.recipients.map(r => r.email));
+  let added = 0;
+  for (const m of mails) {
+    if (!existing.has(m.email) && m.email) {
+      state.recipients.push({ email: m.email, name: m.recipientName || '', company: '' });
+      existing.add(m.email);
+      added++;
+    }
+    if (added >= 20) break;
+  }
+  renderRecipients();
+  updatePreview();
+  toast(`${added}명 추가됨`, 'success');
+}
+
+function loadTemplate() {
+  if (!state.collectedMails.length) { toast('수집된 메일이 없습니다.', 'error'); return; }
+  document.getElementById('template-modal').style.display = 'flex';
+  filterTemplates();
+}
+
+function filterTemplates() {
+  const q = document.getElementById('template-search').value.toLowerCase();
+  const mails = state.collectedMails.filter(m =>
+    !q || m.subject.toLowerCase().includes(q) || m.snippet.toLowerCase().includes(q)
+  ).slice(0, 30);
+
+  const el = document.getElementById('template-list');
+  el.innerHTML = mails.map(m => `
+    <div onclick="selectTemplate('${m.id}')" style="padding:12px 14px; border-bottom:1px solid var(--border); cursor:pointer; transition:background .1s;"
+      onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+      <div style="font-weight:500;font-size:13px;margin-bottom:3px;">${esc(m.subject)}</div>
+      <div style="font-size:12px;color:var(--text-muted);">${fmtDate(m.date)} → ${esc(m.email)}</div>
+      <div style="font-size:12px;color:var(--text-hint);margin-top:3px;">${esc(m.snippet.slice(0,80))}...</div>
+    </div>
+  `).join('') || '<div style="padding:20px;text-align:center;color:var(--text-hint);">결과 없음</div>';
+}
+
+function selectTemplate(id) {
+  const m = state.collectedMails.find(x => x.id === id);
+  if (!m) return;
+  document.getElementById('mail-subject').value = m.subject;
+  document.getElementById('mail-body').value = m.body || m.snippet;
+  updatePreview();
+  closeTemplateModal();
+  toast('템플릿을 불러왔습니다. 내용을 수정하세요.', 'success');
+}
+
+function useAsTemplate(id) {
+  navigate('compose');
+  setTimeout(() => selectTemplate(id), 100);
+}
+
+function closeTemplateModal() {
+  document.getElementById('template-modal').style.display = 'none';
+}
+
+// ── SEND ──
+async function sendBulkMail() {
+  const subject = document.getElementById('mail-subject').value.trim();
+  const body = document.getElementById('mail-body').value.trim();
+  const content1 = document.getElementById('var-content1').value;
+  const content2 = document.getElementById('var-content2').value;
+
+  if (!subject || !body) { toast('제목과 본문을 입력하세요.', 'error'); return; }
+  if (!state.recipients.length) { toast('수신자를 추가하세요.', 'error'); return; }
+  if (!confirm(`${state.recipients.length}명에게 메일을 발송합니다. 계속하시겠습니까?`)) return;
+
+  const btn = document.getElementById('send-btn');
+  btn.disabled = true;
+  document.getElementById('send-progress').style.display = 'block';
+
+  let sent = 0;
+  let failed = 0;
+  const extra = { content1, content2 };
+
+  for (let i = 0; i < state.recipients.length; i++) {
+    const r = state.recipients[i];
+    const finalSubject = interpolate(subject, r, extra);
+    const finalBody = interpolate(body, r, extra);
+    const pct = Math.round(((i+1) / state.recipients.length) * 100);
+    setProgress('send', pct, `${i+1}/${state.recipients.length} - ${r.email} 발송 중...`);
+
+    try {
+      await sendSingleMail(r.email, finalSubject, finalBody);
+      sent++;
+    } catch(e) {
+      failed++;
+      console.error(`Failed to send to ${r.email}:`, e);
+    }
+    await sleep(300); // Rate limiting
+  }
+
+  state.campaignCount++;
+  await logToSheets(subject, state.recipients.length, sent, failed);
+
+  setProgress('send', 100, `완료! ${sent}건 성공, ${failed}건 실패`);
+  toast(`발송 완료: ${sent}건 성공, ${failed}건 실패`, sent > 0 ? 'success' : 'error');
+  updateDashboard();
+  btn.disabled = false;
+}
+
+async function testSend() {
+  if (!state.userEmail) { toast('로그인 후 사용하세요.', 'error'); return; }
+  const subject = document.getElementById('mail-subject').value || '(제목 없음)';
+  const body = document.getElementById('mail-body').value || '(본문 없음)';
+  const sample = { name: '테스트', company: '테스트회사', email: state.userEmail };
+  const extra = {
+    content1: document.getElementById('var-content1').value,
+    content2: document.getElementById('var-content2').value,
+  };
+  try {
+    await sendSingleMail(state.userEmail, '[테스트] ' + interpolate(subject, sample, extra), interpolate(body, sample, extra));
+    toast(`${state.userEmail}로 테스트 메일 발송됨!`, 'success');
+  } catch(e) {
+    toast('테스트 발송 실패: ' + e.message, 'error');
+  }
+}
+
+async function sendSingleMail(to, subject, body) {
+  const senderName = state.senderName || state.userName || '';
+  const from = senderName ? `${senderName} <${state.userEmail}>` : state.userEmail;
+  const raw = btoa(unescape(encodeURIComponent(
+    `From: ${from}\r\nTo: ${to}\r\nSubject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${btoa(unescape(encodeURIComponent(body)))}`
+  ))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+
+  return gapi('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    body: JSON.stringify({ raw }),
+  });
+}
+
+async function logToSheets(subject, total, sent, failed) {
+  if (!state.sheetId) return;
+  try {
+    await gapi(
+      `https://sheets.googleapis.com/v4/spreadsheets/${state.sheetId}/values/발송이력!A:F:append?valueInputOption=RAW`,
+      { method:'POST', body: JSON.stringify({ values: [[
+        new Date().toLocaleString('ko-KR'), subject, total, sent, failed,
+        state.recipients.map(r=>r.email).join(', ')
+      ]] }) }
+    );
+  } catch(e) { console.error('Log to sheets failed:', e); }
+}
+
+// ────────────────────────────────
+// DASHBOARD
+// ────────────────────────────────
+function updateDashboard() {
+  document.getElementById('stat-total').textContent = state.collectedMails.length.toLocaleString();
+  const uniqueRecipients = new Set(state.collectedMails.map(m => m.email)).size;
+  document.getElementById('stat-recipients').textContent = uniqueRecipients.toLocaleString();
+  document.getElementById('stat-campaigns').textContent = state.campaignCount;
+  document.getElementById('mail-count-badge').textContent = state.collectedMails.length;
+
+  const recent = state.collectedMails.slice(0, 5);
+  const el = document.getElementById('recent-mails-table');
+  if (!recent.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">수집된 메일이 없습니다</div><div class="empty-sub">메일 수집 탭에서 Gmail 아웃바운드를 가져오세요</div></div>`;
+    return;
+  }
+  el.innerHTML = `<table>
+    <thead><tr><th>날짜</th><th>수신자</th><th>제목</th></tr></thead>
+    <tbody>${recent.map(m=>`
+      <tr>
+        <td style="white-space:nowrap;">${fmtDate(m.date)}</td>
+        <td>${esc(m.email)}</td>
+        <td class="truncate">${esc(m.subject)}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+// ────────────────────────────────
+// SETTINGS
+// ────────────────────────────────
+function loadSettings() {
+  const id = localStorage.getItem('gm_client_id') || '';
+  const sh = localStorage.getItem('gm_sheet_id') || '';
+  const sn = localStorage.getItem('gm_sender_name') || '';
+  state.clientId = id;
+  state.sheetId = sh;
+  state.senderName = sn;
+  const el = document.getElementById('settings-client-id');
+  if (el) el.value = id;
+  const el2 = document.getElementById('settings-sheet-id');
+  if (el2) el2.value = sh;
+  const el3 = document.getElementById('settings-sender-name');
+  if (el3) el3.value = sn;
+}
+
+function saveSettings() {
+  const id = document.getElementById('settings-client-id').value.trim();
+  const sh = document.getElementById('settings-sheet-id').value.trim();
+  const sn = document.getElementById('settings-sender-name').value.trim();
+  localStorage.setItem('gm_client_id', id);
+  localStorage.setItem('gm_sheet_id', sh);
+  localStorage.setItem('gm_sender_name', sn);
+  state.clientId = id; state.sheetId = sh; state.senderName = sn;
+  toast('설정 저장 완료!', 'success');
+}
+
+function clearLocalData() {
+  if (!confirm('로컬 캐시 데이터를 초기화합니다. Sheets 데이터는 유지됩니다.')) return;
+  state.collectedMails = [];
+  localStorage.removeItem('gm_mails');
+  updateDashboard();
+  toast('로컬 캐시 초기화 완료', 'success');
+}
+
+// ────────────────────────────────
+// CONFIG MODAL
+// ────────────────────────────────
+function showConfigModal() {
+  document.getElementById('client-id-input').value = state.clientId;
+  document.getElementById('sheet-id-input').value = state.sheetId;
+  document.getElementById('config-modal').style.display = 'flex';
+}
+function closeConfigModal() {
+  document.getElementById('config-modal').style.display = 'none';
+}
+function saveConfig() {
+  const id = document.getElementById('client-id-input').value.trim();
+  const sh = document.getElementById('sheet-id-input').value.trim();
+  if (!id) { toast('클라이언트 ID를 입력하세요.', 'error'); return; }
+  localStorage.setItem('gm_client_id', id);
+  if (sh) localStorage.setItem('gm_sheet_id', sh);
+  state.clientId = id; state.sheetId = sh;
+  closeConfigModal();
+  toast('설정 저장됨!', 'success');
+}
+
+// ────────────────────────────────
+// UTILS
+// ────────────────────────────────
+function setProgress(type, pct, text) {
+  document.getElementById(`${type}-progress-fill`).style.width = pct + '%';
+  document.getElementById(`${type}-progress-text`).textContent = text;
+}
+function fmtDate(d) {
+  if (!d) return '';
+  return new Date(d).toLocaleDateString('ko-KR', { year:'2-digit', month:'2-digit', day:'2-digit' });
+}
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function toast(msg, type = '') {
+  const el = document.createElement('div');
+  el.className = `toast${type ? ' '+type : ''}`;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// Init recipient list
+renderRecipients();
+</script>
+</body>
+</html>
